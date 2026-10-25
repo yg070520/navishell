@@ -2,11 +2,14 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.example.navishell">
 
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+
     <!-- Android 11+ 必须声明后才能查询并启动其他应用 -->
     <queries>
         <package android:name="com.example.cartracker" />
         <package android:name="com.autonavi.amapauto" />
         <package android:name="com.autonavi.minimap" />
+        <package android:name="com.example.navishell" />
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
