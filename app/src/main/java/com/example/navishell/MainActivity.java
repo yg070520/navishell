@@ -5,12 +5,11 @@ import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.TextUtils;
 import android.util.Log;
 import android.widget.Toast;
-
-import java.util.ArrayList;
-import java.util.List;
 
 public class MainActivity extends Activity {
 
@@ -29,39 +28,24 @@ public class MainActivity extends Activity {
 
         Log.d(TAG, "壳 App 被车机拉起，准备启动目标程序与高德地图...");
 
-        List<Intent> launchIntents = new ArrayList<>();
-        List<String> missingApps = new ArrayList<>();
+        boolean trackerStarted = launchApp(TARGET_APP_PACKAGE, "目标测试程序");
 
-        addLaunchIntent(launchIntents, missingApps,
-                new String[]{TARGET_APP_PACKAGE}, "目标测试程序");
-        addLaunchIntent(launchIntents, missingApps,
-                new String[]{AMAP_AUTO_PACKAGE, AMAP_PHONE_PACKAGE}, "高德地图");
-
-        if (!missingApps.isEmpty()) {
-            String message = "未找到应用: " + TextUtils.join(", ", missingApps);
-            Log.e(TAG, message);
-            Toast.makeText(this, message, Toast.LENGTH_LONG).show();
-        }
-
-        if (launchIntents.isEmpty()) {
+        // 先让第一个应用完成切前台，再启动第二个；不同应用不能在一次 startActivities 中提交。
+        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+            boolean amapStarted = launchApp(
+                    new String[]{AMAP_AUTO_PACKAGE, AMAP_PHONE_PACKAGE}, "高德地图");
+            if (!trackerStarted && !amapStarted) {
+                Toast.makeText(this, "未找到目标应用", Toast.LENGTH_LONG).show();
+            }
             finish();
-            return;
-        }
-
-        try {
-            // 一次性提交两个启动任务，避免第二个启动因壳 App 已退到后台而被拦截。
-            startActivities(launchIntents.toArray(new Intent[0]));
-            Log.d(TAG, "已提交 " + launchIntents.size() + " 个启动任务");
-        } catch (ActivityNotFoundException | SecurityException e) {
-            Log.e(TAG, "启动失败", e);
-            Toast.makeText(this, "启动失败: " + e.getMessage(), Toast.LENGTH_LONG).show();
-        }
-
-        finish();
+        }, 1200);
     }
 
-    private void addLaunchIntent(List<Intent> launchIntents, List<String> missingApps,
-                                 String[] packageNames, String appName) {
+    private boolean launchApp(String packageName, String appName) {
+        return launchApp(new String[]{packageName}, appName);
+    }
+
+    private boolean launchApp(String[] packageNames, String appName) {
         try {
             PackageManager pm = getPackageManager();
             for (String packageName : packageNames) {
@@ -79,16 +63,17 @@ public class MainActivity extends Activity {
                 if (intent != null) {
                     intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
                             | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
-                    launchIntents.add(intent);
-                    Log.d(TAG, "准备启动: " + appName + " (" + packageName + ")");
-                    return;
+                    startActivity(intent);
+                    Log.d(TAG, "已启动: " + appName + " (" + packageName + ")");
+                    return true;
                 }
             }
 
-            missingApps.add(appName + " (" + TextUtils.join(" / ", packageNames) + ")");
-        } catch (SecurityException e) {
-            Log.e(TAG, "没有权限查询或启动 " + appName, e);
-            missingApps.add(appName + " (" + TextUtils.join(" / ", packageNames) + ")");
+            Log.e(TAG, "未找到应用: " + appName
+                    + " (" + TextUtils.join(" / ", packageNames) + ")");
+        } catch (ActivityNotFoundException | SecurityException e) {
+            Log.e(TAG, "启动 " + appName + " 失败", e);
         }
+        return false;
     }
 }
