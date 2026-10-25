@@ -2,6 +2,17 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.example.navishell">
 
+    <!-- Android 11+ 必须声明后才能查询并启动其他应用 -->
+    <queries>
+        <package android:name="com.example.cartracker" />
+        <package android:name="com.autonavi.amapauto" />
+        <package android:name="com.autonavi.minimap" />
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
     <application
         android:allowBackup="true"
         android:label="导航启动助手"
