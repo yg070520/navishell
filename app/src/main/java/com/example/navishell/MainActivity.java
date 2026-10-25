@@ -11,7 +11,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "NaviShell";
     
     // TODO: 替换为你需要测试拉起的真正目标 App 包名
-    private static final String TARGET_APP_PACKAGE = "com.your.target.app";
+    private static final String TARGET_APP_PACKAGE = "com.example.cartracker";
     // 目标高德车机版包名
     private static final String AMAP_AUTO_PACKAGE = "com.autonavi.amapauto";
 
