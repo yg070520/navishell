@@ -42,13 +42,17 @@ jobs:
     - name: Build Debug APK
       env:
         NAVI_VERSION_CODE: ${{ github.run_number }}
-        NAVI_KEYSTORE_FILE: $RUNNER_TEMP/navishell-release.jks
         NAVI_KEYSTORE_PASSWORD: ${{ secrets.NAVI_KEYSTORE_PASSWORD }}
         NAVI_KEY_ALIAS: ${{ secrets.NAVI_KEY_ALIAS }}
         NAVI_KEY_PASSWORD: ${{ secrets.NAVI_KEY_PASSWORD }}
       run: |
-        if [ ! -s "$NAVI_KEYSTORE_FILE" ]; then
-          unset NAVI_KEYSTORE_FILE
+        if [ -s "$RUNNER_TEMP/navishell-release.jks" ]; then
+          export NAVI_KEYSTORE_FILE="$RUNNER_TEMP/navishell-release.jks"
+        elif [ -n "$NAVI_KEYSTORE_PASSWORD" ]; then
+          echo "Signing secrets are configured but the keystore was not decoded" >&2
+          exit 1
+        else
+          echo "No signing keystore configured; debug build will use the debug certificate"
         fi
         gradle assembleDebug
 
