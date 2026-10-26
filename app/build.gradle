@@ -32,14 +32,10 @@ android {
 
     buildTypes {
         debug {
-            if (naviKeystorePath) {
-                signingConfig signingConfigs.navi
-            }
+            signingConfig null
         }
         release {
-            if (naviKeystorePath) {
-                signingConfig signingConfigs.navi
-            }
+            signingConfig null
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
