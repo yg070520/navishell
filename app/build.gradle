@@ -26,7 +26,6 @@ android {
                 keyPassword System.getenv('NAVI_KEY_PASSWORD')
                 v1SigningEnabled true
                 v2SigningEnabled true
-                v3SigningEnabled false
             }
         }
     }
