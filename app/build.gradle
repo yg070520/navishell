@@ -24,6 +24,9 @@ android {
                 storePassword System.getenv('NAVI_KEYSTORE_PASSWORD')
                 keyAlias System.getenv('NAVI_KEY_ALIAS')
                 keyPassword System.getenv('NAVI_KEY_PASSWORD')
+                v1SigningEnabled true
+                v2SigningEnabled true
+                v3SigningEnabled false
             }
         }
     }
