@@ -67,8 +67,14 @@ jobs:
         OUTPUT="app/build/outputs/apk/debug/app-debug-v1v2.apk"
         if [ -s "$RUNNER_TEMP/navishell-release.jks" ]; then
           cp "$INPUT" "${INPUT%.apk}-unsigned.apk"
-          zip -q -d "${INPUT%.apk}-unsigned.apk" \
-            'META-INF/MANIFEST.MF' 'META-INF/*.SF' 'META-INF/*.RSA'
+          jarsigner \
+            -keystore "$RUNNER_TEMP/navishell-release.jks" \
+            -storepass:env NAVI_KEYSTORE_PASSWORD \
+            -keypass:env NAVI_KEY_PASSWORD \
+            -sigalg SHA256withRSA \
+            -digestalg SHA-256 \
+            "${INPUT%.apk}-unsigned.apk" \
+            "$NAVI_KEY_ALIAS"
           "$APKSIGNER" sign \
             --ks "$RUNNER_TEMP/navishell-release.jks" \
             --ks-key-alias "$NAVI_KEY_ALIAS" \
