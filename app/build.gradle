@@ -2,6 +2,9 @@ plugins {
     id 'com.android.application'
 }
 
+def naviVersionCode = (System.getenv('NAVI_VERSION_CODE') ?: '2').toInteger()
+def naviKeystorePath = System.getenv('NAVI_KEYSTORE_FILE')
+
 android {
     namespace 'com.example.navishell'
     compileSdkVersion 33
@@ -10,12 +13,31 @@ android {
         applicationId "com.example.navishell"
         minSdkVersion 28
         targetSdkVersion 33
-        versionCode 1
-        versionName "1.0"
+        versionCode naviVersionCode
+        versionName "1.${naviVersionCode}"
+    }
+
+    signingConfigs {
+        if (naviKeystorePath) {
+            navi {
+                storeFile file(naviKeystorePath)
+                storePassword System.getenv('NAVI_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('NAVI_KEY_ALIAS')
+                keyPassword System.getenv('NAVI_KEY_PASSWORD')
+            }
+        }
     }
 
     buildTypes {
+        debug {
+            if (naviKeystorePath) {
+                signingConfig signingConfigs.navi
+            }
+        }
         release {
+            if (naviKeystorePath) {
+                signingConfig signingConfigs.navi
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
