@@ -29,7 +29,7 @@ jobs:
     - name: Set up Android SDK
       uses: android-actions/setup-android@v4.0.4
       with:
-        packages: 'platform-tools platforms;android-33 build-tools;33.0.2'
+        packages: 'platform-tools platforms;android-33 build-tools;33.0.2 build-tools;35.0.0'
 
     - name: Decode signing keystore
       env:
@@ -63,38 +63,61 @@ jobs:
         NAVI_KEY_ALIAS: ${{ secrets.NAVI_KEY_ALIAS }}
         NAVI_KEY_PASSWORD: ${{ secrets.NAVI_KEY_PASSWORD }}
       run: |
-        APKSIGNER="$ANDROID_HOME/build-tools/33.0.2/apksigner"
-        INPUT="$(find app/build/outputs/apk/debug -name '*.apk' -type f | head -n 1)"
+        APKSIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+        INPUT="app/build/outputs/apk/debug/app-debug-unsigned.apk"
         OUTPUT="app/build/outputs/apk/debug/app-debug-v1v2.apk"
-        if [ -n "$INPUT" ] && [ -s "$RUNNER_TEMP/navishell-release.jks" ]; then
+        if [ -s "$INPUT" ] && [ -s "$RUNNER_TEMP/navishell-release.jks" ]; then
+          "$APKSIGNER" version
           "$APKSIGNER" sign \
+            --verbose \
             --ks "$RUNNER_TEMP/navishell-release.jks" \
             --ks-key-alias "$NAVI_KEY_ALIAS" \
             --ks-pass env:NAVI_KEYSTORE_PASSWORD \
             --key-pass env:NAVI_KEY_PASSWORD \
             --min-sdk-version 23 \
+            --max-sdk-version 35 \
             --v1-signing-enabled true \
             --v2-signing-enabled true \
             --v3-signing-enabled false \
+            --v4-signing-enabled false \
             --in "$INPUT" \
             --out "$OUTPUT"
         else
-          echo "No signing keystore configured" >&2
+          echo "Unsigned APK or signing keystore is missing" >&2
           exit 1
         fi
 
     - name: Verify V1 and V2 signatures
       run: |
-        APKSIGNER="$ANDROID_HOME/build-tools/33.0.2/apksigner"
+        APKSIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+        APK="app/build/outputs/apk/debug/app-debug-v1v2.apk"
+
+        unzip -l "$APK" | tee apk-contents.txt
+        grep -q 'META-INF/MANIFEST.MF' apk-contents.txt
+        grep -Eq 'META-INF/[^/]+\.(SF|RSA|DSA|EC)' apk-contents.txt
+
         "$APKSIGNER" verify --verbose --print-certs \
-          app/build/outputs/apk/debug/app-debug-v1v2.apk | tee signature-verification.txt
-        grep -q "Verified using v1 scheme (JAR signing): true" signature-verification.txt
-        grep -q "Verified using v2 scheme (APK Signature Scheme v2): true" signature-verification.txt
+          "$APK" | tee signature-v2-verification.txt
+        grep -q "Verified using v2 scheme (APK Signature Scheme v2): true" \
+          signature-v2-verification.txt
+
+        # Android 7+ prefers V2, so V1 must be checked against Android 6.
+        "$APKSIGNER" verify --verbose \
+          --min-sdk-version 23 --max-sdk-version 23 \
+          "$APK" | tee signature-v1-verification.txt
+        grep -q "Verified using v1 scheme (JAR signing): true" \
+          signature-v1-verification.txt
+
+        jarsigner -verify -verbose -certs "$APK" \
+          | tee jar-signature-verification.txt
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: navi-shell-debug-apk
+        name: navi-shell-v1-v2-apk
         path: |
           app/build/outputs/apk/debug/app-debug-v1v2.apk
-          signature-verification.txt
+          apk-contents.txt
+          signature-v1-verification.txt
+          signature-v2-verification.txt
+          jar-signature-verification.txt
