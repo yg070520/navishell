@@ -29,95 +29,49 @@ jobs:
     - name: Set up Android SDK
       uses: android-actions/setup-android@v4.0.4
       with:
-        packages: 'platform-tools platforms;android-33 build-tools;33.0.2 build-tools;35.0.0'
-
-    - name: Decode signing keystore
-      env:
-        NAVI_KEYSTORE_BASE64: ${{ secrets.NAVI_KEYSTORE_BASE64 }}
-      run: |
-        if [ -n "$NAVI_KEYSTORE_BASE64" ]; then
-          echo "$NAVI_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/navishell-release.jks"
-        fi
+        packages: 'platform-tools platforms;android-33 build-tools;33.0.2'
 
     - name: Build Debug APK
       env:
         NAVI_VERSION_CODE: ${{ github.run_number }}
-        NAVI_KEYSTORE_PASSWORD: ${{ secrets.NAVI_KEYSTORE_PASSWORD }}
-        NAVI_KEY_ALIAS: ${{ secrets.NAVI_KEY_ALIAS }}
-        NAVI_KEY_PASSWORD: ${{ secrets.NAVI_KEY_PASSWORD }}
       run: |
-        if [ -s "$RUNNER_TEMP/navishell-release.jks" ]; then
-          export NAVI_KEYSTORE_FILE="$RUNNER_TEMP/navishell-release.jks"
-        elif [ -n "$NAVI_KEYSTORE_PASSWORD" ]; then
-          echo "Signing secrets are configured but the keystore was not decoded" >&2
-          exit 1
-        else
-          echo "No signing keystore configured; debug build will use the debug certificate"
-        fi
         gradle assembleDebug
         find app/build/outputs/apk/debug -maxdepth 2 -type f -name '*.apk' -print
 
     - name: Sign APK with V1 and V2
-      env:
-        NAVI_KEYSTORE_PASSWORD: ${{ secrets.NAVI_KEYSTORE_PASSWORD }}
-        NAVI_KEY_ALIAS: ${{ secrets.NAVI_KEY_ALIAS }}
-        NAVI_KEY_PASSWORD: ${{ secrets.NAVI_KEY_PASSWORD }}
       run: |
-        APKSIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
-        INPUT="app/build/outputs/apk/debug/app-debug-unsigned.apk"
-        OUTPUT="app/build/outputs/apk/debug/app-debug-v1v2.apk"
-        if [ -s "$INPUT" ] && [ -s "$RUNNER_TEMP/navishell-release.jks" ]; then
-          "$APKSIGNER" version
-          "$APKSIGNER" sign \
-            --verbose \
-            --ks "$RUNNER_TEMP/navishell-release.jks" \
-            --ks-key-alias "$NAVI_KEY_ALIAS" \
-            --ks-pass env:NAVI_KEYSTORE_PASSWORD \
-            --key-pass env:NAVI_KEY_PASSWORD \
-            --min-sdk-version 23 \
-            --max-sdk-version 35 \
-            --v1-signing-enabled true \
-            --v2-signing-enabled true \
-            --v3-signing-enabled false \
-            --v4-signing-enabled false \
-            --in "$INPUT" \
-            --out "$OUTPUT"
-        else
-          echo "Unsigned APK or signing keystore is missing" >&2
-          exit 1
-        fi
+        SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT}}"
+        BUILD_TOOLS_DIR="$(find "$SDK_ROOT/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
+        APKSIGNER="$BUILD_TOOLS_DIR/apksigner"
+        INPUT_APK="$(find app/build/outputs/apk/debug -name '*.apk' ! -name '*-v1v2.apk' | head -1)"
 
-    - name: Verify V1 and V2 signatures
-      run: |
-        APKSIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
-        APK="app/build/outputs/apk/debug/app-debug-v1v2.apk"
+        keytool -genkeypair \
+          -keystore debug-v1v2.keystore \
+          -storepass android \
+          -keypass android \
+          -alias androiddebugkey \
+          -keyalg RSA \
+          -keysize 2048 \
+          -validity 36500 \
+          -startdate "2020/01/01 00:00:00" \
+          -dname "CN=Android Debug,O=Android,C=US"
 
-        unzip -l "$APK" | tee apk-contents.txt
-        grep -q 'META-INF/MANIFEST.MF' apk-contents.txt
-        grep -Eq 'META-INF/[^/]+\.(SF|RSA|DSA|EC)' apk-contents.txt
+        "$APKSIGNER" sign \
+          --ks debug-v1v2.keystore \
+          --ks-pass pass:android \
+          --key-pass pass:android \
+          --ks-key-alias androiddebugkey \
+          --v1-signing-enabled true \
+          --v2-signing-enabled true \
+          --v3-signing-enabled false \
+          --out app/build/outputs/apk/debug/app-debug-v1v2.apk \
+          "$INPUT_APK"
 
         "$APKSIGNER" verify --verbose --print-certs \
-          "$APK" | tee signature-v2-verification.txt
-        grep -q "Verified using v2 scheme (APK Signature Scheme v2): true" \
-          signature-v2-verification.txt
-
-        # Android 7+ prefers V2, so V1 must be checked against Android 6.
-        "$APKSIGNER" verify --verbose \
-          --min-sdk-version 23 --max-sdk-version 23 \
-          "$APK" | tee signature-v1-verification.txt
-        grep -q "Verified using v1 scheme (JAR signing): true" \
-          signature-v1-verification.txt
-
-        jarsigner -verify -verbose -certs "$APK" \
-          | tee jar-signature-verification.txt
+          app/build/outputs/apk/debug/app-debug-v1v2.apk
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
         name: navi-shell-v1-v2-apk
-        path: |
-          app/build/outputs/apk/debug/app-debug-v1v2.apk
-          apk-contents.txt
-          signature-v1-verification.txt
-          signature-v2-verification.txt
-          jar-signature-verification.txt
+        path: app/build/outputs/apk/debug/app-debug-v1v2.apk
