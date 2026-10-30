@@ -11,7 +11,7 @@ android {
 
     defaultConfig {
         applicationId "com.example.navishell"
-        minSdkVersion 28
+        minSdkVersion 21
         targetSdkVersion 33
         versionCode naviVersionCode
         versionName "1.${naviVersionCode}"
